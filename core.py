@@ -50,6 +50,15 @@ def resize_image(img, width=None, height=None):
     return img_resized
 
 
+def resize_image_string(img_str, width=None, height=None):
+    file_bytes = np.asarray(bytearray(img_str), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
+    print width, height
+    img_res = resize_image(img, width, height)
+    print img_res.shape
+    return convert_image(img_res)
+
+
 def put_onto(img1, img2, region):
     """
     Puts specific region of img2 onto img1 by taking transparency into account
@@ -75,7 +84,7 @@ def put_onto(img1, img2, region):
     else:
         img2_one = np.copy(img2[:, :, 0])
 
-    ret, mask = cv2.threshold(img2_one, 50, 255, cv2.THRESH_BINARY)
+    ret, mask = cv2.threshold(img2_one, 10, 255, cv2.THRESH_BINARY)
     mask_inv = cv2.bitwise_not(mask)
 
     # Get roi
@@ -103,10 +112,18 @@ class Glasses(object):
         img = cv2.imread(self.image_path, cv2.IMREAD_UNCHANGED)
         return img
 
-    def retouch_glass(self):
-        img = self.get_image()
-        kernel = np.ones((2, 2), np.uint8)
-        img = cv2.dilate(img, kernel, iterations=1)
+    def retouch_glass(self, img):
+        # kernel = np.ones((2, 2), np.uint8)
+        # img = cv2.dilate(img, kernel, iterations=1)
+        # kernel = np.ones((3, 3), np.float32) / 9
+        # dst = cv2.filter2D(img, -1, kernel)
+
+        # kernel = np.ones((2, 2), np.uint8)
+        # img = cv2.dilate(img, kernel, iterations=1)
+
+        # img = cv2.blur(img, (5, 5))
+        # img = cv2.GaussianBlur(img, (5, 5), 0)
+
         return img
 
 
@@ -123,7 +140,7 @@ class Face(object):
     @property
     def features(self):
         if self._features is None:
-            result_data = utils.get_face_data(self.image_path, self.features_path)
+            result_data = utils.get_face_data(self.image_path, self.features_path, from_store=True)
             if result_data is not None:
                 self._features = result_data[0]
         return self._features

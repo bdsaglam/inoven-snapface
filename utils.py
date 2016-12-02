@@ -3,9 +3,6 @@ import os
 
 
 def get_face_data(img_path, img_json_path, from_store=True):
-    if not os.path.isfile(img_path):
-        return
-
     result_text = ''
     if from_store:
         if os.path.isfile(img_json_path):
@@ -22,12 +19,11 @@ def get_face_data(img_path, img_json_path, from_store=True):
 
 
 def faceapi_request_file(img_path):
-    import httplib, urllib, base64
+    import httplib, urllib
 
     subscription_key = os.environ.get('MS_FACE_API_KEY')
     if subscription_key is None:
-        print "Define a valid subscription key as environment variable MS_FACE_API_KEY"
-        return
+        raise EnvironmentError("Define a valid subscription key as environment variable MS_FACE_API_KEY")
 
     headers = {
         # Request headers
@@ -45,13 +41,9 @@ def faceapi_request_file(img_path):
     with open(img_path, 'rb') as f:
         body = f.read()
 
-    try:
-        conn = httplib.HTTPSConnection('api.projectoxford.ai')
-        conn.request("POST", "/face/v1.0/detect?%s" % params, str(body), headers=headers)
-        response = conn.getresponse()
-        result_text = response.read()
-        conn.close()
-        return result_text
-    except Exception as e:
-        print "could not retrieve face api results"
-        return None
+    conn = httplib.HTTPSConnection('api.projectoxford.ai')
+    conn.request("POST", "/face/v1.0/detect?%s" % params, str(body), headers=headers)
+    response = conn.getresponse()
+    result_text = response.read()
+    conn.close()
+    return result_text

@@ -7,13 +7,21 @@ from werkzeug.utils import secure_filename
 import core
 
 base_path = os.getcwd()
-
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
+upload_folder = './uploads/'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
-app.config['UPLOAD_FOLDER'] = './uploads/'
+app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+
+def clear_uploads():
+    import shutil
+    import os.path
+    shutil.rmtree(upload_folder, ignore_errors=True)
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
 
 
 def allowed_file(filename):
@@ -29,16 +37,23 @@ def upload_file():
             flash('No file part')
             return redirect(request.url)
         thefile = request.files['file']
+
         # if user does not select file, browser also
         # submit a empty part without filename
         if thefile.filename == '':
             flash('No selected file')
             return redirect(request.url)
+
         if thefile and allowed_file(thefile.filename):
+            original_file_content = thefile.read()
+            thefile.close()
+            img_resized_str = core.resize_image_string(original_file_content, height=320)
+
             filename = secure_filename(thefile.filename)
-            thefile.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return redirect(url_for('uploaded_file',
-                                    filename=filename))
+            with open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'wb') as f:
+                f.write(img_resized_str)
+
+            return redirect(url_for('effect', filename=filename))
     return render_template('upload_page.html')
 
 
@@ -55,14 +70,15 @@ def face_features(filename):
     image_binary = core.convert_image(theface.plot_features())
     data_uri = image_binary.encode('base64').replace('\n', '')
     image_source = "data:image/png;base64,{0}".format(data_uri)
-    return render_template('features.html', image_source=image_source)
+    return render_template('result.html', image_source=image_source)
 
 
-@app.route('/photos/<filename>', methods=['GET', 'POST'])
+@app.route('/effects/<filename>', methods=['GET', 'POST'])
 def effect(filename):
     image_source = url_for('uploaded_file', filename=filename)
 
-    effect_list = ['sg_red.png', 'sg_black.png', 'sg_aviator_navy.png']
+    effect_list = ['sg_red.png', 'sg_black.png', 'sg_aviator_navy.png',
+                   'sg_pink.png', 'sg_aviator_white.png']
     effects = [url_for('static', filename='img/glasses/' + ef) for ef in effect_list]
 
     if request.method == 'POST':
@@ -70,17 +86,20 @@ def effect(filename):
         theface = core.Face(img_path)
         glass_path = "." + request.form['glass']
         theglasses = core.Glasses(glass_path)
-        print img_path, glass_path
 
         img = theface.wear_glass(theglasses.get_image())
-
         image_binary = core.convert_image(img)
         data_uri = image_binary.encode('base64').replace('\n', '')
         image_source = "data:image/png;base64,{0}".format(data_uri)
-        return render_template('features.html', image_source=image_source)
+        return render_template('result.html', image_source=image_source)
 
     return render_template('effect.html', image_source=image_source, effects=effects)
 
 
 if __name__ == '__main__':
+    # clear_uploads()
     app.run()
+
+    # TODO database for uploads
+    # TODO glass rotation
+    # TODO glass dilation
