@@ -1,5 +1,5 @@
 import json
-import os.path
+import os
 
 
 def get_face_data(img_path, img_json_path, from_store=True):
@@ -24,7 +24,10 @@ def get_face_data(img_path, img_json_path, from_store=True):
 def faceapi_request_file(img_path):
     import httplib, urllib, base64
 
-    subscription_key = 'b0e74930eb5d4a5d984dc1221df41f7e'  # Replace with a valid Subscription Key here.
+    subscription_key = os.environ.get('MS_FACE_API_KEY')
+    if subscription_key is None:
+        print "Define a valid subscription key as environment variable MS_FACE_API_KEY"
+        return
 
     headers = {
         # Request headers

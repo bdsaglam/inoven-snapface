@@ -1,0 +1,1 @@
+export MS_FACE_API_KEY="subscription key"
