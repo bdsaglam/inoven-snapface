@@ -1,4 +1,5 @@
 import os
+import glob
 import json
 
 from flask import Flask, flash, request, redirect, url_for, send_from_directory, render_template, send_file
@@ -12,6 +13,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
+app.config['STATIC_FOLDER'] = 'static'
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
@@ -47,7 +49,7 @@ def upload_file():
         if thefile and allowed_file(thefile.filename):
             original_file_content = thefile.read()
             thefile.close()
-            img_resized_str = core.resize_image_string(original_file_content, height=320)
+            img_resized_str = core.resize_image_string(original_file_content, height=240)
 
             filename = secure_filename(thefile.filename)
             with open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'wb') as f:
@@ -63,11 +65,18 @@ def uploaded_file(filename):
                                filename)
 
 
+@app.route('/photos/')
+def photos():
+    photo_paths = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*.jpg'))
+    filenames = [os.path.split(p)[-1] for p in photo_paths]
+    return render_template('photos.html', filenames=filenames)
+
+
 @app.route('/features/<filename>')
 def face_features(filename):
     img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     theface = core.Face(img_path)
-    image_binary = core.convert_image(theface.plot_features())
+    image_binary = core.convert_image(theface.mark_features())
     data_uri = image_binary.encode('base64').replace('\n', '')
     image_source = "data:image/png;base64,{0}".format(data_uri)
     return render_template('result.html', image_source=image_source)

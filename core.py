@@ -46,17 +46,15 @@ def resize_image(img, width=None, height=None):
     if width is None:
         width = int(height * aspect_ratio)
 
-    img_resized = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
+    img_resized = cv2.resize(img, (width, height))
     return img_resized
 
 
 def resize_image_string(img_str, width=None, height=None):
     file_bytes = np.asarray(bytearray(img_str), dtype=np.uint8)
     img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
-    print width, height
-    img_res = resize_image(img, width, height)
-    print img_res.shape
-    return convert_image(img_res)
+    img_resized_string = resize_image(img, width, height)
+    return convert_image(img_resized_string)
 
 
 def put_onto(img1, img2, region):
@@ -84,7 +82,7 @@ def put_onto(img1, img2, region):
     else:
         img2_one = np.copy(img2[:, :, 0])
 
-    ret, mask = cv2.threshold(img2_one, 10, 255, cv2.THRESH_BINARY)
+    ret, mask = cv2.threshold(img2_one, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     mask_inv = cv2.bitwise_not(mask)
 
     # Get roi
@@ -185,7 +183,7 @@ class Face(object):
 
         return img_face
 
-    def plot_features(self):
+    def mark_features(self):
         img_face = self.get_image()
 
         for k, feature_point in self.features['faceLandmarks'].iteritems():
