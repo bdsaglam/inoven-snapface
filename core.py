@@ -12,7 +12,6 @@ def convert_image(img):
     Paramaters
     ----------
     2-D ndarray
-
     Return
     ----------
     byte string
@@ -25,16 +24,13 @@ def convert_image(img):
 def resize_image(img, width=None, height=None):
     """
     Resizes images
-
     Paramaters
     ----------
     2-D ndarray
-
     Return
     ----------
     2-D ndarray
     """
-
     if width is None and height is None:
         return img
 
@@ -57,21 +53,79 @@ def resize_image_string(img_str, width=None, height=None):
     return convert_image(img_resized_string)
 
 
+def crop_over(img1, img2, point1, point2):
+    """
+    Puts specific region of img2 onto img1 by taking transparency into account
+    Paramaters
+    ----------
+    img1: 2-D ndarray
+    img2: 2-D ndarray
+    point1: tuple, two element, x and y coordinates of pivot point of img1
+    point2: tuple, two element, x and y coordinates of pivot point of img2
+
+    Return
+    ----------
+    cropped_image: 2-D ndarray, cropped image according to boundaries of img1
+    region: tuple, four element, roi indices
+    """
+    p1x, p1y = point1
+    p2x, p2y = point2
+
+    h1, w1 = img1.shape[0], img1.shape[1]
+
+    # translation parameters
+    tx = p1x - p2x
+    ty = p1y - p2y
+
+    # translate and apply conditions
+    grid = np.indices(img2.shape[0:2])
+
+    ny = grid[0] + ty
+    nx = grid[1] + tx
+
+    my = (ny > 0) & (ny < h1)
+    mx = (nx > 0) & (nx < w1)
+
+    rows, cols = np.where(mx & my)
+    r1 = rows[0]
+    r2 = rows[-1]
+    c1 = cols[0]
+    c2 = cols[-1]
+
+    cropped_img2 = img2[r1:r2, c1:c2].copy()
+
+    # update point on img2
+    p2y_new = p2y - r1
+    p2x_new = p2x - c1
+
+    # define roi
+    roi_x1 = int(p1x - p2x_new)
+    roi_y1 = int(p1y - p2y_new)
+
+    roi_x2 = roi_x1 + cropped_img2.shape[1]
+    roi_y2 = roi_y1 + cropped_img2.shape[0]
+
+    region = (roi_x1, roi_y1, roi_x2, roi_y2)
+    return cropped_img2, region
+
+
 def put_onto(img1, img2, region):
     """
     Puts specific region of img2 onto img1 by taking transparency into account
-
     Paramaters
     ----------
     img1: 2-D ndarray
     img2: 2-D ndarray
     region: tuple, four element, x and y coordinates of two points of region rectangle
-
     Return
     ----------
     2-D ndarray
     """
+    # Get roi
+    x1, y1, x2, y2 = region
+    roi = img1[y1:y2, x1:x2]
 
+    # select layer for binary thresholding
     img1_channel_no = img1.shape[-1]
     img2_channel_no = img2.shape[-1]
 
@@ -82,12 +136,9 @@ def put_onto(img1, img2, region):
     else:
         img2_one = np.copy(img2[:, :, 0])
 
+    # apply threshold, get masks
     ret, mask = cv2.threshold(img2_one, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     mask_inv = cv2.bitwise_not(mask)
-
-    # Get roi
-    x1, y1, x2, y2 = region
-    roi = img1[y1:y2, x1:x2]
 
     # Now black-out the area of logo in ROI
     img1_bg = cv2.bitwise_and(roi, roi, mask=mask_inv)
@@ -103,26 +154,19 @@ def put_onto(img1, img2, region):
 
 
 class Glasses(object):
-    def __init__(self, img_path):
+    def __init__(self, img_path, cx, cy):
         self.image_path = img_path
+        self.cx = cx
+        self.cy = cy
+        print img_path
 
-    def get_image(self):
-        img = cv2.imread(self.image_path, cv2.IMREAD_UNCHANGED)
-        return img
+    @property
+    def nose_bridge_ratios(self):
+        return self.cx, self.cy
 
-    def retouch_glass(self, img):
-        # kernel = np.ones((2, 2), np.uint8)
-        # img = cv2.dilate(img, kernel, iterations=1)
-        # kernel = np.ones((3, 3), np.float32) / 9
-        # dst = cv2.filter2D(img, -1, kernel)
-
-        # kernel = np.ones((2, 2), np.uint8)
-        # img = cv2.dilate(img, kernel, iterations=1)
-
-        # img = cv2.blur(img, (5, 5))
-        # img = cv2.GaussianBlur(img, (5, 5), 0)
-
-        return img
+    @property
+    def image(self):
+        return cv2.imread(self.image_path, cv2.IMREAD_UNCHANGED)
 
 
 class Face(object):
@@ -136,6 +180,10 @@ class Face(object):
         self._features = None
 
     @property
+    def image(self):
+        return cv2.imread(self.image_path, cv2.IMREAD_UNCHANGED)
+
+    @property
     def features(self):
         if self._features is None:
             result_data = utils.get_face_data(self.image_path, self.features_path, from_store=True)
@@ -143,48 +191,53 @@ class Face(object):
                 self._features = result_data[0]
         return self._features
 
-    def get_image(self):
-        img = cv2.imread(self.image_path)
-        return img
-
-    def get_glass_pivot(self, facefeatures):
-        landmarks = facefeatures['faceLandmarks']
+    def get_glass_pivot(self):
+        landmarks = self.features['faceLandmarks']
         if landmarks.get('eyebrowLeftOuter') and landmarks.get('eyebrowRightOuter'):
             nr_xc = int((landmarks['noseRootLeft']['x'] + landmarks['noseRootRight']['x']) / 2)
-            eb_x1 = landmarks['eyebrowLeftOuter']['x'] * 0.95
-            eb_x2 = landmarks['eyebrowRightOuter']['x'] * 1.05
-            eb_xc = (eb_x1 + eb_x2) / 2
-
-            gapx = eb_xc - nr_xc
-            x1 = int(eb_x1 - gapx)
-            x2 = int(eb_x2 - gapx)
-            new_width = x2 - x1
-
             nr_yc = int((landmarks['noseRootLeft']['y'] + landmarks['noseRootRight']['y']) / 2)
-            eb_y1 = int(landmarks['eyebrowLeftInner']['y'])
-            eb_y2 = int(landmarks['eyebrowRightInner']['y'])
-            eb_yc = (eb_y1 + eb_y2) / 2
 
-            gapy = nr_yc - eb_yc
-            y1 = int(eb_yc + 0.0 * gapy)
-            return x1, y1, new_width
+            eb_x1 = landmarks['eyebrowLeftOuter']['x']
+            eb_x2 = landmarks['eyebrowRightOuter']['x']
+            eb_w = int(abs(eb_x2 - eb_x1) * 1.2)
 
-    def wear_glass(self, img_glass):
-        img_face = self.get_image()
+            return nr_xc, nr_yc, eb_w
 
-        roi_x1, roi_y1, new_width = self.get_glass_pivot(self.features)
+    def wear_glass(self, glass):
+        img_face = self.image
+        p1x, p1y, new_width = self.get_glass_pivot()
+
+        roll = 0
+        try:
+            roll = self.features['faceAttributes']['headPose']['roll']
+        except:
+            pass
+
+        # prepare glass image
+        img_glass = glass.image
+        cx, cy = glass.nose_bridge_ratios
+
+        # resize glass image
         img_glass = resize_image(img_glass, width=new_width)
+        gh, gw = img_glass.shape[0], img_glass.shape[1]
+        p2x = int(gw * cx)
+        p2y = int(gh * cy)
 
-        roi_x2 = roi_x1 + img_glass.shape[1]
-        roi_y2 = roi_y1 + img_glass.shape[0]
-        region = (roi_x1, roi_y1, roi_x2, roi_y2)
+        # rotate glass image
+        mmatrix = cv2.getRotationMatrix2D((p2x, p2y), -1 * roll, 1)
+        img_glass = cv2.warpAffine(img_glass, mmatrix, (gw, gh))
 
+        # crop glass image if necessary
+        img_glass, region = crop_over(img_face, img_glass,
+                                      (p1x, p1y), (p2x, p2y))
+
+        # put glass image on face image
         img_face = put_onto(img_face, img_glass, region)
 
         return img_face
 
     def mark_features(self):
-        img_face = self.get_image()
+        img_face = self.image
 
         for k, feature_point in self.features['faceLandmarks'].iteritems():
             if feature_point is not None:

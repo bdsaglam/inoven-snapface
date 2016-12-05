@@ -17,3 +17,6 @@ label > input:checked + img { /* (RADIO CHECKED) IMAGE STYLES */
     max-width: 320px;
     max-height: 240px;
 }
+
+.face-result{
+}

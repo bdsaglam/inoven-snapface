@@ -2,7 +2,7 @@ import os
 import glob
 import json
 
-from flask import Flask, flash, request, redirect, url_for, send_from_directory, render_template, send_file
+from flask import Flask, flash, request, redirect, url_for, send_from_directory, render_template, abort
 from werkzeug.utils import secure_filename
 
 import core
@@ -16,6 +16,9 @@ app.config['DEBUG'] = True
 app.config['STATIC_FOLDER'] = 'static'
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+with open('glasses.json') as f:
+    glass_collection = json.load(f)
 
 
 def clear_uploads():
@@ -49,14 +52,14 @@ def upload_file():
         if thefile and allowed_file(thefile.filename):
             original_file_content = thefile.read()
             thefile.close()
-            img_resized_str = core.resize_image_string(original_file_content, height=240)
+            img_resized_str = core.resize_image_string(original_file_content, height=480)
 
             filename = secure_filename(thefile.filename)
             with open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'wb') as f:
                 f.write(img_resized_str)
 
-            return redirect(url_for('effect', filename=filename))
-    return render_template('upload_page.html')
+            return redirect(url_for('put_glass', filename=filename))
+    return render_template('upload.html')
 
 
 @app.route('/uploads/<filename>')
@@ -82,27 +85,29 @@ def face_features(filename):
     return render_template('result.html', image_source=image_source)
 
 
-@app.route('/effects/<filename>', methods=['GET', 'POST'])
-def effect(filename):
+@app.route('/glasses/<filename>', methods=['GET', 'POST'])
+def put_glass(filename):
     image_source = url_for('uploaded_file', filename=filename)
-
-    effect_list = ['sg_red.png', 'sg_black.png', 'sg_aviator_navy.png',
-                   'sg_pink.png', 'sg_aviator_white.png']
-    effects = [url_for('static', filename='img/glasses/' + ef) for ef in effect_list]
 
     if request.method == 'POST':
         img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         theface = core.Face(img_path)
-        glass_path = "." + request.form['glass']
-        theglasses = core.Glasses(glass_path)
 
-        img = theface.wear_glass(theglasses.get_image())
+        pk = request.form['glass']
+        queryset = [gls for gls in glass_collection if gls['pk'] == pk]
+        if len(queryset) == 0:
+            abort(404)
+        glass_item = queryset[0]
+        glass_path = os.path.join(app.config['STATIC_FOLDER'], 'img/glasses', pk + '.png')
+        glass_obj = core.Glasses(glass_path, float(glass_item['cx']), float(glass_item['cy']))
+
+        img = theface.wear_glass(glass_obj)
         image_binary = core.convert_image(img)
         data_uri = image_binary.encode('base64').replace('\n', '')
         image_source = "data:image/png;base64,{0}".format(data_uri)
         return render_template('result.html', image_source=image_source)
 
-    return render_template('effect.html', image_source=image_source, effects=effects)
+    return render_template('glass.html', image_source=image_source, glasses=glass_collection)
 
 
 if __name__ == '__main__':
@@ -110,5 +115,3 @@ if __name__ == '__main__':
     app.run()
 
     # TODO database for uploads
-    # TODO glass rotation
-    # TODO glass dilation
