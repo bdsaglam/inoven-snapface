@@ -1,6 +1,8 @@
+aniso8601==1.2.0
 click==6.6
 cycler==0.10.0
 Flask==0.11.1
+Flask-RESTful==0.3.5
 itsdangerous==0.24
 Jinja2==2.8
 MarkupSafe==0.23
@@ -13,5 +15,6 @@ pyparsing==2.1.10
 python-dateutil==2.6.0
 pytz==2016.7
 scipy==0.18.1
+six==1.10.0
 sympy==1.0
 Werkzeug==0.11.11

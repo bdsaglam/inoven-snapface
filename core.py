@@ -42,7 +42,7 @@ def resize_image(img, width=None, height=None):
     if width is None:
         width = int(height * aspect_ratio)
 
-    img_resized = cv2.resize(img, (width, height))
+    img_resized = cv2.resize(img, (int(width), int(height)))
     return img_resized
 
 
@@ -153,15 +153,18 @@ def put_onto(img1, img2, region):
     return img1
 
 
-class Glasses(object):
-    def __init__(self, img_path, cx, cy):
+class Thing(object):
+    def __init__(self, img_path, cx, cy, kind, scale_factor=None):
         self.image_path = img_path
+        self.kind = kind
         self.cx = cx
         self.cy = cy
-        print img_path
+        if scale_factor is None:
+            scale_factor = 1
+        self.scale_factor = scale_factor
 
     @property
-    def nose_bridge_ratios(self):
+    def normalized_center(self):
         return self.cx, self.cy
 
     @property
@@ -203,36 +206,62 @@ class Face(object):
 
             return nr_xc, nr_yc, eb_w
 
-    def wear_glass(self, glass):
-        img_face = self.image
-        p1x, p1y, new_width = self.get_glass_pivot()
+    def get_hat_pivot(self):
+        landmarks = self.features['faceLandmarks']
 
+        p2x = int((landmarks['noseRootLeft']['x'] + landmarks['noseRootRight']['x']) / 2)
+        p2y = int((landmarks['noseRootLeft']['y'] + landmarks['noseRootRight']['y']) / 2)
+
+        ebo_left = np.array((landmarks['eyebrowLeftOuter']['x'], landmarks['eyebrowLeftOuter']['y']))
+        ebo_right = np.array((landmarks['eyebrowRightOuter']['x'], landmarks['eyebrowRightOuter']['y']))
+
+        new_width = np.linalg.norm(ebo_left - ebo_right) * 1.35
+
+        return int(p2x), int(p2y), int(new_width)
+
+    def wear_accessories(self, accessories):
+        img_face = self.image
+        for ac in accessories:
+            if ac.kind == 'glasses':
+                pivot = self.get_glass_pivot()
+            elif ac.kind == 'hat':
+                pivot = self.get_hat_pivot()
+            else:
+                raise Exception('Undefined effect')
+            
+            img_face = self.wear_thing(img_face, ac, pivot)
+
+        return img_face
+
+    def wear_thing(self, img_face, thing, pivot):
+        img_thing = thing.image
+        p1x, p1y, new_width = pivot
+
+        # prepare thing image
+        cx, cy = thing.normalized_center
+
+        # resize thing image
+        img_thing = resize_image(img_thing, width=new_width * thing.scale_factor)
+        gh, gw = img_thing.shape[0], img_thing.shape[1]
+        p2x = int(gw * cx)
+        p2y = int(gh * cy)
+
+        # rotate thing image
         roll = 0
         try:
             roll = self.features['faceAttributes']['headPose']['roll']
         except:
             pass
 
-        # prepare glass image
-        img_glass = glass.image
-        cx, cy = glass.nose_bridge_ratios
-
-        # resize glass image
-        img_glass = resize_image(img_glass, width=new_width)
-        gh, gw = img_glass.shape[0], img_glass.shape[1]
-        p2x = int(gw * cx)
-        p2y = int(gh * cy)
-
-        # rotate glass image
         mmatrix = cv2.getRotationMatrix2D((p2x, p2y), -1 * roll, 1)
-        img_glass = cv2.warpAffine(img_glass, mmatrix, (gw, gh))
+        img_thing = cv2.warpAffine(img_thing, mmatrix, (gw, gh))
 
-        # crop glass image if necessary
-        img_glass, region = crop_over(img_face, img_glass,
+        # crop thing image if necessary
+        img_thing, region = crop_over(img_face, img_thing,
                                       (p1x, p1y), (p2x, p2y))
 
-        # put glass image on face image
-        img_face = put_onto(img_face, img_glass, region)
+        # put thing image on face image
+        img_face = put_onto(img_face, img_thing, region)
 
         return img_face
 

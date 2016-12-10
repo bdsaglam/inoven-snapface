@@ -6,7 +6,7 @@ label > input { /* HIDE RADIO */
 label > input + img { /* IMAGE STYLES */
     cursor: pointer;
     border: 2px solid transparent;
-    width: 200px !important;
+    width: 100px !important;
 }
 
 label > input:checked + img { /* (RADIO CHECKED) IMAGE STYLES */
@@ -18,5 +18,6 @@ label > input:checked + img { /* (RADIO CHECKED) IMAGE STYLES */
     max-height: 240px;
 }
 
-.face-result{
+.face-pre{
+    max-width: 480px;
 }

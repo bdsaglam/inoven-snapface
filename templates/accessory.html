@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-9">
+            <img src="{{ image_source }}" alt="" class="face-pre">
+        </div>
+        <div class="col-md-3">
+            <form method="POST" action="" enctype="multipart/form-data">
+                <fieldset id="group1">
+                    {% for accessory in accessories %}
+                    <label>
+                        <input type="checkbox" name="accessory" value="{{accessory['pk']}}" multiple/>
+                        <img src="{{url_for('static', filename='img/accessory/' + accessory['pk'] + '.png')}}" alt="">
+                    </label>
+                    {% endfor%}
+                    <input type=submit value=Apply class="btn btn-primary">
+                </fieldset>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

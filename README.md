@@ -1,4 +1,4 @@
 # inoven-snapface
 
-opencv yüklenmeli
-environment variable olarak MS Face API key tanımlanmalı
+* opencv yüklenmeli
+* prod-env.sh dosyasındaki environment variable olarak MS Face API key tanımlanmalı
