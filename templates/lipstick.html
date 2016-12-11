@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-9">
+            <img src="{{ image_source }}" alt="" class="face-pre">
+        </div>
+        <div class="col-md-3">
+            <form method="POST" action="" enctype="multipart/form-data">
+                <fieldset id="group1">
+                    {% for lipstick_name, lipstick_color in lipstick_dict.iteritems() %}
+                    <input type="radio" name="lipstick" value="{{lipstick_name}}">
+                    <span style="background-color:{{lipstick_color['hex']}};">
+                           &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    </span>
+                    {{lipstick_name}}<br>
+                    {% endfor%}
+                    <input type=submit value=Apply class="btn btn-primary">
+                </fieldset>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

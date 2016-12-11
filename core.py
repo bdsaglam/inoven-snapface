@@ -228,7 +228,7 @@ class Face(object):
                 pivot = self.get_hat_pivot()
             else:
                 raise Exception('Undefined effect')
-            
+
             img_face = self.wear_thing(img_face, ac, pivot)
 
         return img_face
@@ -272,4 +272,78 @@ class Face(object):
             if feature_point is not None:
                 x, y = int(feature_point['x']), int(feature_point['y'])
                 cv2.rectangle(img_face, (x, y), (x + 2, y + 2), (0, 255, 0), 2)
+        return img_face
+
+    def get_lip_region(self):
+        landmarks = self.features['faceLandmarks']
+        ml_x = landmarks['mouthLeft']['x'] * 0.98
+        mr_x = landmarks['mouthRight']['x'] * 1.02
+
+        uplt_y = landmarks['upperLipTop']['y'] * 0.97
+        unlb_y = landmarks['underLipBottom']['y'] * 1.03
+
+        x1 = int(ml_x)
+        y1 = int(uplt_y)
+        x2 = int(mr_x)
+        y2 = int(unlb_y)
+
+        return x1, y1, x2, y2
+
+    # TODO lip masking must be improved, delete one of them
+    def find_lip_mask(self, img_lip_hsv):
+        # lower mask (0-10)
+        lower_red1 = np.array([0, 50, 160])
+        upper_red1 = np.array([7, 200, 255])
+        lip_mask1 = cv2.inRange(img_lip_hsv, lower_red1, upper_red1)
+
+        # upper mask (160-180)
+        lower_red2 = np.array([160, 50, 160])
+        upper_red2 = np.array([180, 200, 255])
+        lip_mask2 = cv2.inRange(img_lip_hsv, lower_red2, upper_red2)
+
+        lip_mask = lip_mask1 + lip_mask2
+
+        kernel = np.ones((2, 2), np.uint8)
+        lip_mask = cv2.morphologyEx(lip_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+        kernel = np.ones((2, 2), np.uint8)
+        lip_mask = cv2.morphologyEx(lip_mask, cv2.MORPH_OPEN, kernel, iterations=3)
+
+        kernel = np.ones((2, 2), np.uint8)
+        lip_mask = cv2.dilate(lip_mask, kernel, iterations=2)
+        return lip_mask
+
+    def find_lip_mask2(self, img_lip_hsv):
+        # lower mask (0-10)
+        lower_bound = np.array([160, 50, 180], np.uint8)
+        upper_bound = np.array([180, 150, 255], np.uint8)
+
+        lip_mask = cv2.inRange(img_lip_hsv, lower_bound, upper_bound)
+
+        kernel = np.ones((2, 2), np.uint8)
+        lip_mask = cv2.morphologyEx(lip_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+        return lip_mask
+
+    def wear_lipstick(self, rouge_rgb):
+        x1, y1, x2, y2 = self.get_lip_region()
+
+        img_face = self.image
+
+        img_lip_hsv_original = cv2.cvtColor(img_face[y1:y2, x1:x2, :], cv2.COLOR_BGR2HSV)
+        img_lip_hsv_modified = np.copy(img_lip_hsv_original)
+
+        mask_lip = self.find_lip_mask2(img_lip_hsv_original)
+        rows, cols = np.where(mask_lip)
+        rouge_hsv = cv2.cvtColor(np.uint8([[rouge_rgb]]), cv2.COLOR_RGB2HSV)[0][0]
+        img_lip_hsv_modified[rows, cols, 0:2] = rouge_hsv[0:2]
+
+        rouge_value = rouge_hsv[-1]
+        mixed_values = [int(rouge_value * 0.4 + v * 0.6) for v in img_lip_hsv_original[rows, cols, 2]]
+        img_lip_hsv_modified[rows, cols, 2] = mixed_values
+
+        img_lip_bgr_modified = cv2.cvtColor(img_lip_hsv_modified, cv2.COLOR_HSV2BGR)
+
+        img_face[y1:y2, x1:x2] = img_lip_bgr_modified
+
         return img_face

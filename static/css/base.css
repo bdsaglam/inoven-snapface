@@ -13,11 +13,17 @@ label > input:checked + img { /* (RADIO CHECKED) IMAGE STYLES */
     border: 2px solid #000;
 }
 
-.face{
+.face {
     max-width: 320px;
     max-height: 240px;
 }
 
-.face-pre{
+.face-pre {
     max-width: 480px;
+}
+
+.lipstick {
+    margin-left: 20px;
+    margin-right: 20px;
+    padding: 8px;
 }

@@ -23,6 +23,11 @@ with open('accessories.json') as f:
 glasses_collection = [ac for ac in accessory_collection if ac['kind'] == 'glasses']
 hat_collection = [ac for ac in accessory_collection if ac['kind'] == 'hat']
 
+with open('lipstick_book.json') as f:
+    lipstick_book = json.load(f)
+
+lipstick_dict = {k: dict(rgb=v, hex='#%02x%02x%02x' % tuple(v)) for k, v in lipstick_book.iteritems()}
+
 
 def clear_uploads():
     import shutil
@@ -82,11 +87,11 @@ def uploaded_file(filename):
                                filename)
 
 
-@app.route('/photos/')
+@app.route('/accessories/')
 def photos():
     photo_paths = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*.jpg'))
     filenames = [os.path.split(p)[-1] for p in photo_paths]
-    return render_template('photos.html', filenames=filenames)
+    return render_template('photos_acc.html', filenames=filenames)
 
 
 @app.route('/features/<filename>')
@@ -97,6 +102,13 @@ def face_features(filename):
     data_uri = image_binary.encode('base64').replace('\n', '')
     image_source = "data:image/png;base64,{0}".format(data_uri)
     return render_template('result.html', image_source=image_source)
+
+
+@app.route('/accessory/')
+def photos_accessory():
+    photo_paths = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*.jpg'))
+    filenames = [os.path.split(p)[-1] for p in photo_paths]
+    return render_template('photos_acc.html', filenames=filenames)
 
 
 @app.route('/accessories/<filename>', methods=['GET', 'POST'])
@@ -123,6 +135,38 @@ def wear_accessory(filename):
         return render_template('result.html', image_source=image_source)
 
     return render_template('accessory.html', image_source=image_source, accessories=accessory_collection)
+
+
+@app.route('/lipstick/')
+def photos_lipstick():
+    photo_paths = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*.jpg'))
+    filenames = [os.path.split(p)[-1] for p in photo_paths]
+    return render_template('photos_lip.html', filenames=filenames)
+
+
+@app.route('/lipstick/<filename>', methods=['GET', 'POST'])
+def wear_lipstick(filename):
+    image_source = url_for('uploaded_file', filename=filename)
+
+    if request.method == 'POST':
+        img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        theface = core.Face(img_path)
+
+        lipstick_name = request.form['lipstick']
+        lipstick_obj = lipstick_dict.get(lipstick_name)
+
+        if lipstick_obj is None:
+            abort(403, 'Undefined lipstick color')
+        lipstick_rgb = lipstick_obj['rgb']
+
+        # TODO wear multiple hat and glass at the same time
+        img = theface.wear_lipstick(lipstick_rgb)
+        image_binary = core.convert_image(img)
+        data_uri = image_binary.encode('base64').replace('\n', '')
+        image_source = "data:image/png;base64,{0}".format(data_uri)
+        return render_template('result.html', image_source=image_source)
+
+    return render_template('lipstick.html', image_source=image_source, lipstick_dict=lipstick_dict)
 
 
 if __name__ == '__main__':
