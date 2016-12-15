@@ -20,9 +20,6 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 with open('accessories.json') as f:
     accessory_collection = json.load(f)
 
-glasses_collection = [ac for ac in accessory_collection if ac['kind'] == 'glasses']
-hat_collection = [ac for ac in accessory_collection if ac['kind'] == 'hat']
-
 with open('lipstick_book.json') as f:
     lipstick_book = json.load(f)
 
@@ -43,7 +40,7 @@ def allowed_file(filename):
 
 
 def get_accessory_object(pk):
-    queryset = [accessory for accessory in accessory_collection if ac['pk'] == pk]
+    queryset = [accessory for accessory in accessory_collection if accessory['pk'] == pk]
     if len(queryset) == 0:
         return None
     accessory_item = queryset[0]

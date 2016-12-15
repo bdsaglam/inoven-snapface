@@ -198,14 +198,14 @@ class Face(object):
     def get_glass_pivot(self):
         landmarks = self.features['faceLandmarks']
         if landmarks.get('eyebrowLeftOuter') and landmarks.get('eyebrowRightOuter'):
-            nr_xc = int((landmarks['noseRootLeft']['x'] + landmarks['noseRootRight']['x']) / 2)
-            nr_yc = int((landmarks['noseRootLeft']['y'] + landmarks['noseRootRight']['y']) / 2)
+            nr_xc = (landmarks['noseRootLeft']['x'] + landmarks['noseRootRight']['x']) / 2
+            nr_yc = (landmarks['noseRootLeft']['y'] + landmarks['noseRootRight']['y']) / 2
 
             eb_x1 = landmarks['eyebrowLeftOuter']['x']
             eb_x2 = landmarks['eyebrowRightOuter']['x']
-            eb_w = int(abs(eb_x2 - eb_x1) * 1.2)
+            eb_w = abs(eb_x2 - eb_x1) * 1.2
 
-            return nr_xc, nr_yc, eb_w
+            return int(nr_xc), int(nr_yc), int(eb_w)
 
     def get_hat_pivot(self):
         landmarks = self.features['faceLandmarks']
@@ -219,6 +219,18 @@ class Face(object):
         new_width = np.linalg.norm(ebo_left - ebo_right) * 1.35
 
         return int(p2x), int(p2y), int(new_width)
+
+    def get_facial_hair_pivot(self):
+        landmarks = self.features['faceLandmarks']
+
+        p1x, p1y = int(landmarks['upperLipTop']['x']), int(landmarks['upperLipTop']['y'])
+
+        mo_left = np.array((landmarks['mouthLeft']['x'], landmarks['mouthLeft']['y']))
+        mo_right = np.array((landmarks['mouthRight']['x'], landmarks['mouthRight']['y']))
+
+        new_width = np.linalg.norm(mo_left - mo_right)
+
+        return int(p1x), int(p1y), int(new_width)
 
     def wear_thing(self, img_face, thing, pivot):
         img_thing = thing.image
@@ -259,6 +271,8 @@ class Face(object):
                 pivot = self.get_glass_pivot()
             elif ac.kind == 'hat':
                 pivot = self.get_hat_pivot()
+            elif ac.kind == 'facial_hair':
+                pivot = self.get_facial_hair_pivot()
             else:
                 raise Exception('Undefined effect')
 
