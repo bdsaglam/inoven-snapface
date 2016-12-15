@@ -43,7 +43,7 @@ def allowed_file(filename):
 
 
 def get_accessory_object(pk):
-    queryset = [ac for ac in accessory_collection if ac['pk'] == pk]
+    queryset = [accessory for accessory in accessory_collection if ac['pk'] == pk]
     if len(queryset) == 0:
         return None
     accessory_item = queryset[0]
@@ -87,13 +87,6 @@ def uploaded_file(filename):
                                filename)
 
 
-@app.route('/accessories/')
-def photos():
-    photo_paths = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*.jpg'))
-    filenames = [os.path.split(p)[-1] for p in photo_paths]
-    return render_template('photos_acc.html', filenames=filenames)
-
-
 @app.route('/features/<filename>')
 def face_features(filename):
     img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -111,7 +104,7 @@ def photos_accessory():
     return render_template('photos_acc.html', filenames=filenames)
 
 
-@app.route('/accessories/<filename>', methods=['GET', 'POST'])
+@app.route('/accessory/<filename>', methods=['GET', 'POST'])
 def wear_accessory(filename):
     image_source = url_for('uploaded_file', filename=filename)
 
@@ -127,7 +120,6 @@ def wear_accessory(filename):
         if len(kinds) != len(set(kinds)):
             abort(403, 'You cannot wear multiple accessories of same kind')
 
-        # TODO wear multiple hat and glass at the same time
         img = theface.wear_accessories(accessory_objs)
         image_binary = core.convert_image(img)
         data_uri = image_binary.encode('base64').replace('\n', '')
@@ -159,7 +151,6 @@ def wear_lipstick(filename):
             abort(403, 'Undefined lipstick color')
         lipstick_rgb = lipstick_obj['rgb']
 
-        # TODO wear multiple hat and glass at the same time
         img = theface.wear_lipstick(lipstick_rgb)
         image_binary = core.convert_image(img)
         data_uri = image_binary.encode('base64').replace('\n', '')
@@ -170,7 +161,6 @@ def wear_lipstick(filename):
 
 
 if __name__ == '__main__':
-    # clear_uploads()
     app.run()
 
     # TODO database for uploads

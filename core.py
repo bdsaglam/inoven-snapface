@@ -1,4 +1,5 @@
 from __future__ import division
+import operator
 import os.path
 
 import numpy as np
@@ -219,20 +220,6 @@ class Face(object):
 
         return int(p2x), int(p2y), int(new_width)
 
-    def wear_accessories(self, accessories):
-        img_face = self.image
-        for ac in accessories:
-            if ac.kind == 'glasses':
-                pivot = self.get_glass_pivot()
-            elif ac.kind == 'hat':
-                pivot = self.get_hat_pivot()
-            else:
-                raise Exception('Undefined effect')
-
-            img_face = self.wear_thing(img_face, ac, pivot)
-
-        return img_face
-
     def wear_thing(self, img_face, thing, pivot):
         img_thing = thing.image
         p1x, p1y, new_width = pivot
@@ -265,6 +252,20 @@ class Face(object):
 
         return img_face
 
+    def wear_accessories(self, accessories):
+        img_face = self.image
+        for ac in accessories:
+            if ac.kind == 'glasses':
+                pivot = self.get_glass_pivot()
+            elif ac.kind == 'hat':
+                pivot = self.get_hat_pivot()
+            else:
+                raise Exception('Undefined effect')
+
+            img_face = self.wear_thing(img_face, ac, pivot)
+
+        return img_face
+
     def mark_features(self):
         img_face = self.image
 
@@ -274,13 +275,17 @@ class Face(object):
                 cv2.rectangle(img_face, (x, y), (x + 2, y + 2), (0, 255, 0), 2)
         return img_face
 
-    def get_lip_region(self):
+    # -------- lipstick effect --------
+    #
+    def get_mouth_roi(self):
         landmarks = self.features['faceLandmarks']
-        ml_x = landmarks['mouthLeft']['x'] * 0.98
-        mr_x = landmarks['mouthRight']['x'] * 1.02
+        delta = 2
 
-        uplt_y = landmarks['upperLipTop']['y'] * 0.97
-        unlb_y = landmarks['underLipBottom']['y'] * 1.03
+        ml_x = landmarks['mouthLeft']['x'] - delta
+        mr_x = landmarks['mouthRight']['x'] + delta
+
+        uplt_y = landmarks['upperLipTop']['y'] - delta
+        unlb_y = landmarks['underLipBottom']['y'] + delta
 
         x1 = int(ml_x)
         y1 = int(uplt_y)
@@ -289,61 +294,115 @@ class Face(object):
 
         return x1, y1, x2, y2
 
-    # TODO lip masking must be improved, delete one of them
-    def find_lip_mask(self, img_lip_hsv):
-        # lower mask (0-10)
-        lower_red1 = np.array([0, 50, 160])
-        upper_red1 = np.array([7, 200, 255])
-        lip_mask1 = cv2.inRange(img_lip_hsv, lower_red1, upper_red1)
+    #
+    def get_lip_polygon(self):
+        landmarks = self.features['faceLandmarks']
 
-        # upper mask (160-180)
-        lower_red2 = np.array([160, 50, 160])
-        upper_red2 = np.array([180, 200, 255])
-        lip_mask2 = cv2.inRange(img_lip_hsv, lower_red2, upper_red2)
+        p1x, p1y = landmarks['mouthLeft']['x'], landmarks['mouthLeft']['y']
+        p2x, p2y = landmarks['upperLipTop']['x'], landmarks['upperLipTop']['y']
+        p3x, p3y = landmarks['mouthRight']['x'], landmarks['mouthRight']['y']
+        p4x, p4y = landmarks['underLipBottom']['x'], landmarks['underLipBottom']['y']
 
-        lip_mask = lip_mask1 + lip_mask2
+        pts = np.array([[p1x, p1y], [p2x, p2y], [p3x, p3y], [p4x, p4y + 3]], np.int32)
+        pts = pts.reshape((-1, 1, 2))
+        return pts
 
-        kernel = np.ones((2, 2), np.uint8)
-        lip_mask = cv2.morphologyEx(lip_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    @staticmethod
+    def poly2mask(img_shape, points):
+        mask = np.zeros((img_shape[0], img_shape[1]), dtype=np.uint8)
+        cv2.fillConvexPoly(mask, points, 1)
+        return mask
 
-        kernel = np.ones((2, 2), np.uint8)
-        lip_mask = cv2.morphologyEx(lip_mask, cv2.MORPH_OPEN, kernel, iterations=3)
+    @staticmethod
+    def filter_by_range(img_channel, therange):
+        low_end = therange[0]
+        high_end = therange[1]
 
-        kernel = np.ones((2, 2), np.uint8)
-        lip_mask = cv2.dilate(lip_mask, kernel, iterations=2)
+        lower_bound = np.array([low_end])
+        upper_bound = np.array([high_end])
+        mask = cv2.inRange(img_channel, lower_bound, upper_bound)
+        return mask
+
+    #
+    @staticmethod
+    def get_dominant_hues(img_hsv, mask=None):
+        if mask is None:
+            img_array = img_hsv.ravel()
+        else:
+            rows, cols = np.where(mask)
+            img_array = img_hsv[rows, cols, 0].ravel()
+
+        hist_norm, bin_edges = np.histogram(img_array, bins=181, range=(0, 181), density=True)
+        hue_vals = np.where(hist_norm > 0.03)[0]
+        return hue_vals
+
+    @staticmethod
+    def get_dominant_saturations(img_hsv, mask=None):
+        val_range = (0, 256)
+        val_max = 256
+        channel = 1
+
+        if mask is None:
+            img_array = img_hsv.ravel()
+        else:
+            rows, cols = np.where(mask)
+            img_array = img_hsv[rows, cols, channel].ravel()
+
+        hist_norm, bin_edges = np.histogram(img_array, bins=val_max, range=val_range, density=True)
+        sat_vals = np.where(hist_norm > 0.005)[0]
+        return sat_vals
+
+    def get_lip_mask_by_hue(self, img_mouth_hsv, hue_vals):
+        if len(hue_vals) == 0:
+            return np.ones(img_mouth_hsv.shape[0:2], dtype=np.uint8)
+
+        masks = [self.filter_by_range(img_mouth_hsv[:, :, 0], (hv - 0.5, hv + 0.5)) for hv in hue_vals]
+        lip_mask = reduce(operator.add, masks)
         return lip_mask
 
-    def find_lip_mask2(self, img_lip_hsv):
-        # lower mask (0-10)
-        lower_bound = np.array([160, 50, 180], np.uint8)
-        upper_bound = np.array([180, 150, 255], np.uint8)
+    def get_lip_mask_by_saturation(self, img_mouth_hsv, sat_vals):
+        if len(sat_vals) == 0:
+            return np.ones(img_mouth_hsv.shape[0:2], dtype=np.uint8)
 
-        lip_mask = cv2.inRange(img_lip_hsv, lower_bound, upper_bound)
-
-        kernel = np.ones((2, 2), np.uint8)
-        lip_mask = cv2.morphologyEx(lip_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-
+        lip_mask = self.filter_by_range(img_mouth_hsv[:, :, 1], (sat_vals.min(), sat_vals.max()))
         return lip_mask
 
-    def wear_lipstick(self, rouge_rgb):
-        x1, y1, x2, y2 = self.get_lip_region()
+    @staticmethod
+    def paint_by_mask(img_hsv, mask, clr_rgb):
+        rows, cols = np.where(mask)
+        clr_hsv = cv2.cvtColor(np.uint8([[clr_rgb]]), cv2.COLOR_RGB2HSV)[0][0]
+        img_hsv[rows, cols, 0:2] = clr_hsv[0:2]
 
-        img_face = self.image
+        clr_val_channel = clr_hsv[-1]
+        mixed_values = [int(clr_val_channel * 0.4 + v * 0.6) for v in img_hsv[rows, cols, 2]]
+        img_hsv[rows, cols, 2] = mixed_values
+        return img_hsv
 
-        img_lip_hsv_original = cv2.cvtColor(img_face[y1:y2, x1:x2, :], cv2.COLOR_BGR2HSV)
-        img_lip_hsv_modified = np.copy(img_lip_hsv_original)
+    def wear_lipstick(self, lipstick_rgb):
+        img_face_bgr = self.image
+        img_face_hsv = cv2.cvtColor(img_face_bgr, cv2.COLOR_BGR2HSV)
 
-        mask_lip = self.find_lip_mask2(img_lip_hsv_original)
-        rows, cols = np.where(mask_lip)
-        rouge_hsv = cv2.cvtColor(np.uint8([[rouge_rgb]]), cv2.COLOR_RGB2HSV)[0][0]
-        img_lip_hsv_modified[rows, cols, 0:2] = rouge_hsv[0:2]
+        # crop mouth region
+        x1, y1, x2, y2 = self.get_mouth_roi()
+        img_mouth_hsv = np.copy(img_face_hsv[y1:y2, x1:x2, :])
 
-        rouge_value = rouge_hsv[-1]
-        mixed_values = [int(rouge_value * 0.4 + v * 0.6) for v in img_lip_hsv_original[rows, cols, 2]]
-        img_lip_hsv_modified[rows, cols, 2] = mixed_values
+        # get lips polygon mask
+        points = self.get_lip_polygon()
+        lip_mask_polygon = self.poly2mask(img_face_hsv.shape, points)
 
-        img_lip_bgr_modified = cv2.cvtColor(img_lip_hsv_modified, cv2.COLOR_HSV2BGR)
+        # derive mask for lips
+        hue_vals = self.get_dominant_hues(img_face_hsv, lip_mask_polygon)
+        lip_mask_hue = self.get_lip_mask_by_hue(img_mouth_hsv, hue_vals)
 
-        img_face[y1:y2, x1:x2] = img_lip_bgr_modified
+        sat_vals = self.get_dominant_saturations(img_face_hsv, lip_mask_polygon)
+        lip_mask_sat = self.get_lip_mask_by_saturation(img_mouth_hsv, sat_vals)
 
-        return img_face
+        lip_mask_shape = lip_mask_polygon[y1:y2, x1:x2]
+
+        # lip_mask_final = lip_mask_hue * lip_mask_sat
+        lip_mask_final = np.logical_or(lip_mask_hue * lip_mask_sat, lip_mask_shape).astype(np.uint8)
+
+        # apply painting on lips
+        img_face_hsv[y1:y2, x1:x2] = self.paint_by_mask(img_mouth_hsv, lip_mask_final, lipstick_rgb)
+
+        return cv2.cvtColor(img_face_hsv, cv2.COLOR_HSV2BGR)
