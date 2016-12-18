@@ -347,7 +347,7 @@ class Face(object):
             img_array = img_hsv[rows, cols, 0].ravel()
 
         hist_norm, bin_edges = np.histogram(img_array, bins=181, range=(0, 181), density=True)
-        hue_vals = np.where(hist_norm > 0.03)[0]
+        hue_vals = np.where(hist_norm > 0.02)[0]
         return hue_vals
 
     @staticmethod
@@ -363,7 +363,7 @@ class Face(object):
             img_array = img_hsv[rows, cols, channel].ravel()
 
         hist_norm, bin_edges = np.histogram(img_array, bins=val_max, range=val_range, density=True)
-        sat_vals = np.where(hist_norm > 0.005)[0]
+        sat_vals = np.where(hist_norm > 0.004)[0]
         return sat_vals
 
     def get_lip_mask_by_hue(self, img_mouth_hsv, hue_vals):
@@ -413,8 +413,9 @@ class Face(object):
 
         lip_mask_shape = lip_mask_polygon[y1:y2, x1:x2]
 
-        # lip_mask_final = lip_mask_hue * lip_mask_sat
         lip_mask_final = np.logical_or(lip_mask_hue * lip_mask_sat, lip_mask_shape).astype(np.uint8)
+        kernel = np.ones((2, 2), np.uint8)
+        lip_mask_final = cv2.dilate(lip_mask_final, kernel, iterations=1)
 
         # apply painting on lips
         img_face_hsv[y1:y2, x1:x2] = self.paint_by_mask(img_mouth_hsv, lip_mask_final, lipstick_rgb)

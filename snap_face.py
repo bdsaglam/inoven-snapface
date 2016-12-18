@@ -1,3 +1,4 @@
+import re
 import os
 import glob
 import json
@@ -6,6 +7,7 @@ from flask import Flask, flash, request, redirect, url_for, send_from_directory,
 from werkzeug.utils import secure_filename
 
 import core
+import utils
 
 base_path = os.getcwd()
 upload_folder = './uploads/'
@@ -24,6 +26,14 @@ with open('lipstick_book.json') as f:
     lipstick_book = json.load(f)
 
 lipstick_dict = {k: dict(rgb=v, hex='#%02x%02x%02x' % tuple(v)) for k, v in lipstick_book.iteritems()}
+
+
+def get_uploaded_filenames():
+    photo_paths = [p for p in glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*')) if
+                   re.match(r'.*\.(jpg|jpeg|png)', p)]
+
+    filenames = [os.path.split(p)[-1] for p in photo_paths]
+    return filenames
 
 
 def clear_uploads():
@@ -71,10 +81,12 @@ def upload_file():
             img_resized_str = core.resize_image_string(original_file_content, height=480)
 
             filename = secure_filename(thefile.filename)
-            with open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'wb') as f:
-                f.write(img_resized_str)
+            img_filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            with open(img_filepath, 'wb') as fff:
+                fff.write(img_resized_str)
+            utils.get_face_data(img_filepath, from_store=False)
 
-            return redirect(url_for('wear_accessory', filename=filename))
+            return redirect(url_for('face_features', filename=filename))
     return render_template('upload.html')
 
 
@@ -96,8 +108,7 @@ def face_features(filename):
 
 @app.route('/accessory/')
 def photos_accessory():
-    photo_paths = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*.jpg'))
-    filenames = [os.path.split(p)[-1] for p in photo_paths]
+    filenames = get_uploaded_filenames()
     return render_template('photos_acc.html', filenames=filenames)
 
 
@@ -128,8 +139,7 @@ def wear_accessory(filename):
 
 @app.route('/lipstick/')
 def photos_lipstick():
-    photo_paths = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], '*.jpg'))
-    filenames = [os.path.split(p)[-1] for p in photo_paths]
+    filenames = get_uploaded_filenames()
     return render_template('photos_lip.html', filenames=filenames)
 
 

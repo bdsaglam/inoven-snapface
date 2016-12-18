@@ -63,9 +63,9 @@
     "pk": "9",
     "name": "nordic",
     "kind": "facial_hair",
-    "cx": "0.51",
-    "cy": "0.27",
-    "scale_factor": "4.8"
+    "cx": "0.50",
+    "cy": "0.26",
+    "scale_factor": "4.5"
   },
   {
     "pk": "10",

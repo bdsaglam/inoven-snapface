@@ -2,7 +2,12 @@ import json
 import os
 
 
-def get_face_data(img_path, img_json_path, from_store=True):
+def get_face_data(img_path, img_json_path=None, from_store=True):
+    if img_json_path is None:
+        path, fileext = os.path.split(img_path)
+        filename, ext = os.path.splitext(fileext)
+        img_json_path = os.path.join(path, filename + '.json')
+
     result_text = ''
     if from_store:
         if os.path.isfile(img_json_path):
